@@ -10,19 +10,19 @@
   (java.net.Socket. '"127.0.0.1" '1024))
 
 (defn get-reader [socket]
-  (BufferedReader. (InputStreamReader. (. socket getInputStream))))
+  (BufferedReader. (InputStreamReader. (.getInputStream socket))))
 
 (defn get-writer [socket]
-  (PrintWriter. (. socket getOutputStream)))
+  (PrintWriter. (.getOutputStream socket)))
 
 (defn send-request [socket message]
   (let [out (get-writer socket) in (get-reader socket)]
   (. out println message)
   (. out flush)
-  {:header1 (. in readLine)
-   :header2 (. in readLine)
-   :header3 (. in readLine)
-   :blank (. in readLine)
+  {:status-header (.readLine in)
+   :date-header (.readLine in)
+   :type-header (.readLine in)
+   :blank (.readLine in)
    :message (line-seq in)}))
 
 (deftest http-server
@@ -38,12 +38,20 @@
                                    (str "GET /Users/Tank/testFile HTTP/1.1\n" header_1 header_2)))))
   (testing "should respond with an appropriate error code if a given file does not exist")
     (is (= "HTTP/1.1 404 Not Found"
-           (:header1 (send-request (connect)
+           (:status-header (send-request (connect)
                                    (str "GET /Unkown/File HTTP/1.1\n" header_1 header_2)))))
   (testing "should retun a Bad Request response if the request does not contain the host header")
     (is (= "HTTP/1.1 400 Bad Request"
-           (:header1 (send-request (connect)
+           (:status-header (send-request (connect)
                                    (str "GET /Users/Tank/testFile HTTP/1.1\n" header_2)))))
+  (testing "should have the correct type header for the requested file")
+    (is (= "Content-Type: text/html"
+           (:type-header (send-request (connect)
+                                  (str "GET /Users/Tank/Sites/index.html HTTP/1.1\n" header_1 header_2)))))
+  (testing "should translate %20 into spaces in the file path")
+    (is (= "HTTP/1.1 200 OK"
+           (:status-header (send-request (connect)
+                                   (str "GET /Users/Tank/test%20file%202 HTTP/1.1\n" header_1 header_2)))))
 
   (. (get server :server-socket) close)
 )

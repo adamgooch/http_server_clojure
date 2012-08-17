@@ -37,3 +37,6 @@
 (defn create-my-server [port function]
   (create-server-aux function (ServerSocket. port)))
 
+;(defn start-server []
+;  (doto (new java.net.ServerSocket port) (.accept)))
+

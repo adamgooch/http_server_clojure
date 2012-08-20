@@ -34,19 +34,30 @@
 (defn convert-spaces [file-name]
   (clojure.string/replace file-name "%20" " "))
 
-(defn process-file [out file-name response]
-  (try
-    (with-open [reader (clojure.java.io/reader (str @root-directory (convert-spaces file-name)))]
-      (.println out (status-header :ok))
-      (.println out (date-header))
-      (.println out (type-header (get-file-type file-name)))
-      (.println out "")
-      (doseq [line (line-seq reader)]
-        (.println out line)))
-  (catch java.io.FileNotFoundException exception
-    (send-response out (assoc response :status (status-header :not-found)
-                                       :type (type-header "txt")
-                                       :body "HTTP/1.1 404 Not Found")))))
+(defn process-file [out-stream file-name response]
+  (if (= (get-file-type file-name) "gif")
+    (let [out (clojure.java.io/output-stream out-stream)]
+      (with-open [r (clojure.java.io/input-stream (convert-spaces file-name))]
+        (loop [c (.read r)]
+          (if (not= c -1)
+            (do
+              (.write out c)
+              (recur (.read r))))))
+      (.flush out))
+    (let [out (PrintWriter. out-stream)]
+      (try
+        (with-open [reader (clojure.java.io/reader (str @root-directory (convert-spaces file-name)))]
+          (.println out (status-header :ok))
+          (.println out (date-header))
+          (.println out (type-header (get-file-type file-name)))
+          (.println out "")
+          (doseq [line (line-seq reader)]
+            (.println out line)))
+      (catch java.io.FileNotFoundException exception
+        (send-response out (assoc response :status (status-header :not-found)
+                                           :type (type-header "txt")
+                                           :body "HTTP/1.1 404 Not Found"))))
+      (.close out))))
 
 (defn has-valid-host-header [host-line]
   (= (first (clojure.string/split host-line #" ")) "Host:"))
@@ -66,7 +77,7 @@
         (send-response output (assoc response :status (status-header :ok)
                                               :type (type-header "txt")
                                               :body "Hello World"))
-        (process-file output (second request) response)))
+        (process-file out (second request) response)))
     (send-response output (assoc response :status (status-header :bad-request)
                                           :type (type-header "txt")
                                           :body "No Host: header recevied")))
@@ -74,7 +85,7 @@
   (. output close)))
 
 (defn start-server []
-  (create-my-server port handle-client))
+  (create-server handle-client (java.net.ServerSocket. port)))
 
 (defn -main
   "Start the server."

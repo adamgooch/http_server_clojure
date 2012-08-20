@@ -13,19 +13,19 @@
       (.close))))
 
 (defn- accept-fn [#^Socket socket connections function]
-  (let [ins (.getInputStream socket)
-        outs (.getOutputStream socket)]
+  (let [in-stream (.getInputStream socket)
+        out-stream (.getOutputStream socket)]
     (on-thread #(do
                   (dosync (commute connections conj socket))
                   (try
-                    (function ins outs)
+                    (function in-stream out-stream)
                   (catch SocketException e))
                   (close-socket socket)
                   (dosync (commute connections disj socket))))))
 
 (defstruct server-def :server-socket :connections)
 
-(defn create-server-aux [function #^ServerSocket socket]
+(defn create-server [function #^ServerSocket socket]
   (let [connections (ref #{})]
     (on-thread #(when-not (.isClosed socket)
                   (try
@@ -33,9 +33,6 @@
                   (catch SocketException e))
                   (recur)))
     (struct-map server-def :server-socket socket :connections connections)))
-
-(defn create-my-server [port function]
-  (create-server-aux function (ServerSocket. port)))
 
 ;(defn start-server []
 ;  (doto (new java.net.ServerSocket port) (.accept)))

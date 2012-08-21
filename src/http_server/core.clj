@@ -5,7 +5,7 @@
 (def port 1024)
 (def root-directory (ref ""))
 
-(defn status-header [status]
+(defn get-status-header [status]
   (cond (= status :ok) '"HTTP/1.1 200 OK"
         (= status :not-found) '"HTTP/1.1 404 Not Found"
         (= status :bad-request) '"HTTP/1.1 400 Bad Request"))
@@ -54,11 +54,11 @@
 
 (defn send-media [out-stream file-name response]
     (try
-      (with-open [input (clojure.java.io/input-stream (convert-spaces file-name))]
-        (send-headers out-stream (assoc response :status (status-header :ok)))
+      (with-open [input (clojure.java.io/input-stream (str @root-directory (convert-spaces file-name)))]
+        (send-headers out-stream (assoc response :status (get-status-header :ok)))
         (send-media-file input out-stream))
     (catch java.io.FileNotFoundException exception
-      (send-headers out-stream (assoc response :status (status-header :not-found)))
+      (send-headers out-stream (assoc response :status (get-status-header :not-found)))
       (send-body out-stream "HTTP/1.1 404 Not Found"))))
 
 (defn send-text-file [reader out-stream]
@@ -75,10 +75,10 @@
                        (InputStreamReader.
                        (DataInputStream.
                        (FileInputStream. (str @root-directory (convert-spaces file-name))))))]
-      (send-headers out-stream (assoc headers :status (status-header :ok)))
+      (send-headers out-stream (assoc headers :status (get-status-header :ok)))
       (send-text-file reader out-stream))
   (catch java.io.FileNotFoundException exception
-    (send-headers out-stream (assoc headers :status (status-header :not-found)))
+    (send-headers out-stream (assoc headers :status (get-status-header :not-found)))
     (send-body out-stream "HTTP/1.1 404 Not Found"))))
 
 (defn process-file [out-stream file-name headers]
@@ -96,7 +96,7 @@
   (when (is-get request)
     (if (= (second request) "/")
       (do
-        (send-headers out-stream (assoc headers :status (status-header :ok)))
+        (send-headers out-stream (assoc headers :status (get-status-header :ok)))
         (send-body out-stream "Hello World"))
       (process-file out-stream
                     (second request)
@@ -109,7 +109,7 @@
       (if (has-valid-host-header (.readLine input))
         (serve-client request headers out-stream)
         (do
-          (send-headers out-stream (assoc headers :status (status-header :bad-request)))
+          (send-headers out-stream (assoc headers :status (get-status-header :bad-request)))
           (send-body out-stream "No Host: header recevied"))))))
 
 (defn start-server []

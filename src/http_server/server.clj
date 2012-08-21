@@ -26,6 +26,8 @@
 (defstruct server-def :server-socket :connections)
 
 (defn create-server [function #^ServerSocket socket]
+  "The function required here is sent the input and output stream
+  of the connected client to handle the communication."
   (let [connections (ref #{})]
     (on-thread #(when-not (.isClosed socket)
                   (try
@@ -36,4 +38,4 @@
 
 ;(defn start-server []
 ;  (doto (new java.net.ServerSocket port) (.accept)))
-
+;this is here as a reminder of how I started to write the server

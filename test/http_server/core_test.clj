@@ -67,4 +67,12 @@
   (. (get server :server-socket) close)
 )
 
+(deftest get-file-type-test
+  (testing "should return html when given this file type")
+    (is (= "html" (get-file-type "Users/Tank/Sites/index.html"))))
+
+(deftest type-header-test
+  (testing "should return the correct content type header")
+    (is (= "Content-Type: text/html" (get-type-header "html"))))
+
 ;  (testing "should handle multiple simultaneous requests")

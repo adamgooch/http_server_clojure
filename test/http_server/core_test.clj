@@ -22,6 +22,7 @@
   {:status-header (.readLine in)
    :date-header (.readLine in)
    :type-header (.readLine in)
+   :content-length-header (.readLine in)
    :blank (.readLine in)
    :message (line-seq in)}))
 

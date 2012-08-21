@@ -10,7 +10,7 @@
         (= status :not-found) '"HTTP/1.1 404 Not Found"
         (= status :bad-request) '"HTTP/1.1 400 Bad Request"))
 
-(defn date-header []
+(defn get-date-header []
   (str "Date: " (.toString (java.util.Date.))))
 
 (defn get-type-header [file-type]
@@ -21,11 +21,18 @@
         (= file-type "png") '"Content-Type: image/png"
         :else '"Content-Type: text/plain"))
 
+(defn convert-spaces [file-name]
+  (clojure.string/replace file-name "%20" " "))
+
+(defn get-content-length-header [file-name]
+  (.length (java.io.File. (str @root-directory (convert-spaces file-name)))))
+
 (defn send-headers [out-stream headers]
   (let [output (PrintWriter. out-stream)]
     (.println output (:status headers))
     (.println output (:date headers))
     (.println output (:type headers))
+    (.println output (str "Content-Length: " (:content-length headers)))
     (.println output (:blank-line headers))
     (.flush output)))
 
@@ -34,11 +41,14 @@
     (.println output message)
     (.close output)))
 
+(defn file-not-found [out-stream headers]
+  (send-headers out-stream (assoc headers :status (get-status-header :not-found)
+                                          :content-length (.length "HTTP/1.1 404 Not Found")))
+  (send-body out-stream "HTTP/1.1 404 Not Found"))
+
+
 (defn get-file-type [file-name]
   (last (clojure.string/split file-name #"\.")))
-
-(defn convert-spaces [file-name]
-  (clojure.string/replace file-name "%20" " "))
 
 (defn is-media [type-header]
   (= "image" (subs type-header 14 19)))
@@ -51,15 +61,14 @@
           (.write out c)
           (recur (.read input-stream)))))))
 
-
-(defn send-media [out-stream file-name response]
+(defn send-media [out-stream file-name headers]
     (try
       (with-open [input (clojure.java.io/input-stream (str @root-directory (convert-spaces file-name)))]
-        (send-headers out-stream (assoc response :status (get-status-header :ok)))
+        (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                                :content-length (get-content-length-header file-name)))
         (send-media-file input out-stream))
     (catch java.io.FileNotFoundException exception
-      (send-headers out-stream (assoc response :status (get-status-header :not-found)))
-      (send-body out-stream "HTTP/1.1 404 Not Found"))))
+      (file-not-found out-stream headers))))
 
 (defn send-text-file [reader out-stream]
   (with-open [out (PrintWriter. out-stream)]
@@ -75,11 +84,11 @@
                        (InputStreamReader.
                        (DataInputStream.
                        (FileInputStream. (str @root-directory (convert-spaces file-name))))))]
-      (send-headers out-stream (assoc headers :status (get-status-header :ok)))
+      (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                              :content-length (get-content-length-header file-name)))
       (send-text-file reader out-stream))
   (catch java.io.FileNotFoundException exception
-    (send-headers out-stream (assoc headers :status (get-status-header :not-found)))
-    (send-body out-stream "HTTP/1.1 404 Not Found"))))
+    (file-not-found out-stream headers))))
 
 (defn process-file [out-stream file-name headers]
   (if (is-media (headers :type))
@@ -89,23 +98,22 @@
 (defn has-valid-host-header [host-line]
   (= (first (clojure.string/split host-line #" ")) "Host:"))
 
-(defn is-get [request]
-  (= (first request) "GET"))
-
 (defn serve-client [request headers out-stream]
-  (when (is-get request)
-    (if (= (second request) "/")
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)))
-        (send-body out-stream "Hello World"))
-      (process-file out-stream
-                    (second request)
-                    (assoc headers :type (get-type-header (get-file-type (second request))))))))
+  (let [file-name (second request)]
+    (when (= (first request) "GET")
+      (if (= file-name "/")
+        (do
+          (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                                  :content-length (.length "Hello World")))
+          (send-body out-stream "Hello World"))
+        (process-file out-stream
+                      file-name
+                      (assoc headers :type (get-type-header (get-file-type file-name))))))))
 
 (defn handle-client [in-stream out-stream]
   (with-open [input (BufferedReader. (InputStreamReader. in-stream))]
     (let [request (clojure.string/split (.readLine input) #" ")
-          headers {:date (date-header), :type (get-type-header "txt"), :blank-line ""}]
+          headers {:date (get-date-header), :type (get-type-header "txt"), :blank-line ""}]
       (if (has-valid-host-header (.readLine input))
         (serve-client request headers out-stream)
         (do

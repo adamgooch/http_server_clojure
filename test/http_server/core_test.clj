@@ -7,7 +7,7 @@
 (def header_2 "User-Agent: HTTPTool/1.1\n\n")
 
 (defn connect []
-  (java.net.Socket. '"127.0.0.1" '1024))
+  (java.net.Socket. '"127.0.0.1" '5000))
 
 (defn get-reader [socket]
   (BufferedReader. (InputStreamReader. (.getInputStream socket))))
@@ -33,10 +33,11 @@
     (is (= '("Hello World")
            (:message (send-request (connect)
                                    (str "GET / HTTP/1.1\n" header_1 header_2)))))
+
   (testing "should be able to serve a file from a given directory")
     (is (= '("This is a short test file." "It has three lines." "This is the last one.")
            (:message (send-request (connect)
-                                   (str "GET /Users/Tank/testFile HTTP/1.1\n" header_1 header_2)))))
+                     (str "GET /Users/Tank/Clojure/http-server/test/testFile HTTP/1.1\n" header_1 header_2)))))
   (testing "should respond with an appropriate error code if a given file does not exist")
     (is (= "HTTP/1.1 404 Not Found"
            (:status-header (send-request (connect)
@@ -52,18 +53,34 @@
   (testing "should translate %20 into spaces in the file path")
     (is (= "HTTP/1.1 200 OK"
            (:status-header (send-request (connect)
-                                   (str "GET /Users/Tank/test%20file%202 HTTP/1.1\n" header_1 header_2)))))
+              (str "GET /Users/Tank/Clojure/http-server/test/test%20file%202 HTTP/1.1\n" header_1 header_2)))))
+
+  (testing "should receive directory contents when given GET directory")
+    (is (= '("http_server" "test file 2" "testFile")
+           (:message (send-request (connect)
+                     (str "GET /Users/Tank/Clojure/http-server/test HTTP/1.1\n" header_1 header_2)))))
 
   (. (get server :server-socket) close)
 )
 
 (deftest http-server2
-  (def server (-main "/Users/Tank"))
+  (def server (-main "/Users/Tank/Clojure/http-server/test"))
 
   (testing "should be able to point it to a directory")
     (is (= '("This is a short test file." "It has three lines." "This is the last one.")
            (:message (send-request (connect)
                                    (str "GET /testFile HTTP/1.1\n" header_1 header_2)))))
+
+  (. (get server :server-socket) close)
+)
+
+(deftest get-directory-contents
+  (def server (-main "/Users/Tank/Clojure/http-server"))
+
+  (testing "should receive directory contents when given GET /test")
+    (is (= '("http_server" "test file 2" "testFile")
+           (:message (send-request (connect)
+                                   (str "GET /test HTTP/1.1\n" header_1 header_2)))))
 
   (. (get server :server-socket) close)
 )

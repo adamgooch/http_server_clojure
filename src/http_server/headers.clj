@@ -16,7 +16,7 @@
     (.println output (:status headers))
     (.println output (:date headers))
     (.println output (:type headers))
-    (.println output (str "Content-Length: " (:content-length headers)))
+    (.println output (:content-length headers))
     (.println output (:blank-line headers))
     (.flush output)))
 

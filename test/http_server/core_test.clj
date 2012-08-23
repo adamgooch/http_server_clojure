@@ -95,4 +95,12 @@
   (testing "should return the correct content type header")
     (is (= "Content-Type: text/html" (http-server.headers/get-type-header "html"))))
 
+(deftest get-with-query
+  (def server (-main "/Users/Tank/Clojure/http-server"))
+
+  (testing "should echo back the query string")
+    (is (= '("variable1 = you" "variable2 = me")
+           (:message (send-request (connect)
+                                (str "GET /test?variable1=you&variable2=me HTTP/1.1\n" header_1 header_2)))))
+  (. (get server :server-socket) close))
 ;  (testing "should handle multiple simultaneous requests")

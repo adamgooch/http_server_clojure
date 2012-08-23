@@ -79,37 +79,66 @@
     (send-media out-stream file-name headers)
     (send-text out-stream file-name headers)))
 
+(defn echo-back-query-string [out-stream request headers]
+  (let [request (clojure.string/split request #"\?")
+        body (clojure.string/replace (clojure.string/replace (second request) "=" " = ") "&" "\n")]
+    (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                    :content-length (str "Content-Length: " (+ 1 (.length body)))))
+    (send-body out-stream body)))
 
-(defn handle-get-request [out-stream file-name headers]
-  (if (= file-name "/")
-    (do
-      (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                      :content-length (.length "Hello World")))
-;     (send-body out-stream (get-dir-contents (str @root-directory "/"))))
-      (send-body out-stream "Hello World"))
-    (let [file-path (convert-spaces (str @root-directory file-name))]
-      (process-file out-stream file-name
-                  (assoc headers :type (get-type-header (get-file-type file-name)))))))
+(defn handle-get-request [out-stream request headers]
+  (if (re-find #"\?" request)
+    (echo-back-query-string out-stream request headers)
+    (if (= request "/")
+      (do
+        (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                        :content-length (str "Content-Length: " (.length "Hello World"))))
+  ;     (send-body out-stream (get-dir-contents (str @root-directory "/"))))
+        (send-body out-stream "Hello World"))
+      (let [file-path (convert-spaces (str @root-directory request))]
+        (process-file out-stream request
+                    (assoc headers :type (get-type-header (get-file-type request))))))))
+
+(defn handle-post-request [out-stream request headers]
+  (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                  :content-length (str "Content-Length: " (.length "POST Request"))))
+  (send-body out-stream "POST Request"))
+
+(defn handle-put-request [out-stream request headers]
+  (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                  :content-length (str "Content-Length: " (.length "PUT Request"))))
+  (send-body out-stream "PUT Request"))
 
 (defn serve-client [out-stream request headers]
-    (when (= (first request) "GET")
-      (handle-get-request out-stream (second request) headers)))
+    (cond
+      (= (first request) "GET")
+        (handle-get-request out-stream (second request) headers)
+      (= (first request) "PUT")
+        (handle-put-request out-stream (second request) headers)
+      (= (first request) "POST")
+        (handle-post-request out-stream (second request) headers)))
 
 (defn send-no-host-header [out-stream headers]
   (send-headers out-stream (assoc headers :status (get-status-header :bad-request)
-                                :content-length (.length "No Host: header received")))
+                                :content-length (str "Content-Length: " (.length "No Host: header received"))))
   (send-body out-stream "No Host: header recevied"))
 
-(defn is-valid-host-header [line]
-  (= (first (clojure.string/split line #" ")) "Host:"))
+(defn get-request [in-stream]
+  (with-open [w (clojure.java.io/writer "/Users/Tank/temp/server.txt" :append true)]
+    (let [input (BufferedReader. (InputStreamReader. in-stream))]
+      (loop [received (list (.readLine input)) cnt 10]
+        (if (not= (first received) "")
+          (do
+            (.write w (str (first received) "\n"))
+            (recur (conj received (.readLine input)) (dec cnt)))
+          received)))))
 
 (defn handle-client [in-stream out-stream]
-  (with-open [input (BufferedReader. (InputStreamReader. in-stream))]
-    (let [request (clojure.string/split (.readLine input) #" ")
-          headers {:date (get-date-header), :type (get-type-header "txt"), :blank-line ""}]
-      (if (is-valid-host-header (.readLine input))
-        (serve-client out-stream request headers)
-        (send-no-host-header out-stream headers)))))
+  (let [request (get-request in-stream)
+        headers {:date (get-date-header), :type (get-type-header "txt"), :blank-line ""}]
+      (if (empty? (filter #(re-find #"Host: " %) request))
+        (send-no-host-header out-stream headers)
+        (serve-client out-stream (clojure.string/split (last request) #" ") headers))))
 
 (defn start-server []
   (create-server handle-client (java.net.ServerSocket. port)))

@@ -1,41 +1,14 @@
 (ns http-server.core
-  (:use [http-server.server])
+  (:require (http-server [server :refer :all]
+                         [headers :refer :all]))
   (:import (java.io BufferedReader InputStreamReader PrintWriter FileReader DataInputStream FileInputStream))
   (:gen-class))
 
 (def port 5000)
 (def root-directory (ref ""))
 
-(defn get-status-header [status]
-  (cond (= status :ok) '"HTTP/1.1 200 OK"
-        (= status :not-found) '"HTTP/1.1 404 Not Found"
-        (= status :bad-request) '"HTTP/1.1 400 Bad Request"))
-
-(defn get-date-header []
-  (str "Date: " (.toString (java.util.Date.))))
-
-(defn get-type-header [file-type]
-  (cond (= file-type "html") '"Content-Type: text/html"
-        (= file-type "css") '"Content-Type: text/css"
-        (= file-type "jpg") '"Content-Type: image/jpg"
-        (= file-type "gif") '"Content-Type: image/gif"
-        (= file-type "png") '"Content-Type: image/png"
-        :else '"Content-Type: text/plain"))
-
 (defn convert-spaces [file-name]
   (clojure.string/replace file-name "%20" " "))
-
-(defn get-content-length-header [file-name]
-  (.length (java.io.File. (str @root-directory (convert-spaces file-name)))))
-
-(defn send-headers [out-stream headers]
-  (let [output (PrintWriter. out-stream)]
-    (.println output (:status headers))
-    (.println output (:date headers))
-    (.println output (:type headers))
-    (.println output (str "Content-Length: " (:content-length headers)))
-    (.println output (:blank-line headers))
-    (.flush output)))
 
 (defn send-body [out-stream message]
   (let [output (PrintWriter. out-stream)]
@@ -63,7 +36,7 @@
 
 (defn send-media [out-stream file-name headers]
     (try
-      (with-open [input (clojure.java.io/input-stream (str @root-directory (convert-spaces file-name)))]
+      (with-open [input (clojure.java.io/input-stream file-name)]
         (send-headers out-stream (assoc headers :status (get-status-header :ok)
                                                 :content-length (get-content-length-header file-name)))
         (send-media-file input out-stream))
@@ -82,30 +55,30 @@
   (loop [contents "" dir (.list (java.io.File. file))]
     (if (= (count dir) 0)
       (subs contents 1)
-;      contents
       (recur (str contents "\n" (first dir)) (rest dir)))))
 
 (defn send-text [out-stream file-name headers]
-  (try
-    (with-open [reader (BufferedReader.
-                       (InputStreamReader.
-                       (DataInputStream.
-                       (FileInputStream. (str @root-directory (convert-spaces file-name))))))]
-      (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                              :content-length (get-content-length-header file-name)))
-      (send-text-file reader out-stream))
-  (catch java.io.FileNotFoundException exception
-    (if (nil? (re-find #"(No such file or directory)" (str exception)))
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                               :content-length (.length (get-dir-contents (str @root-directory file-name)))))
-        (send-body out-stream (get-dir-contents (str @root-directory file-name))))
-      (file-not-found out-stream headers)))))
+  (let [file-path (str @root-directory (convert-spaces file-name))]
+    (if (.exists (java.io.File. file-path))
+      (if (.isDirectory (java.io.File. file-path))
+        (do
+          (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                 :content-length (str "Content-Length: " (.length (get-dir-contents file-path)))))
+          (send-body out-stream (get-dir-contents file-path)))
+        (with-open [reader (BufferedReader.
+                   (InputStreamReader.
+                   (DataInputStream.
+                   (FileInputStream. file-path))))]
+          (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                          :content-length (get-content-length-header file-path)))
+          (send-text-file reader out-stream)))
+      (file-not-found out-stream headers))))
 
 (defn process-file [out-stream file-name headers]
   (if (is-media (headers :type))
     (send-media out-stream file-name headers)
     (send-text out-stream file-name headers)))
+
 
 (defn handle-get-request [out-stream file-name headers]
   (if (= file-name "/")
@@ -114,8 +87,9 @@
                                       :content-length (.length "Hello World")))
 ;     (send-body out-stream (get-dir-contents (str @root-directory "/"))))
       (send-body out-stream "Hello World"))
-    (process-file out-stream file-name
-                  (assoc headers :type (get-type-header (get-file-type file-name))))))
+    (let [file-path (convert-spaces (str @root-directory file-name))]
+      (process-file out-stream file-name
+                  (assoc headers :type (get-type-header (get-file-type file-name)))))))
 
 (defn serve-client [out-stream request headers]
     (when (= (first request) "GET")

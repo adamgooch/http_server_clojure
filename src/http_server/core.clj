@@ -1,6 +1,7 @@
 (ns http-server.core
   (:require (http-server [server :refer :all]
-                         [headers :refer :all]))
+                         [headers :refer :all])
+             (clojure [string :only (split) :as string]))
   (:import (java.io BufferedReader InputStreamReader PrintWriter FileReader DataInputStream FileInputStream))
   (:gen-class))
 
@@ -43,13 +44,29 @@
     (catch java.io.FileNotFoundException exception
       (file-not-found out-stream headers))))
 
-(defn send-text-file [reader out-stream]
-  (with-open [out (PrintWriter. out-stream)]
-    (loop [line (.readLine reader)]
-      (if (not= line nil)
-        (do
-          (.println out line)
-          (recur (.readLine reader)))))))
+(defn send-text-file-1 [out-stream file-path]
+  (with-open [reader (clojure.java.io/reader file-path)
+             out (PrintWriter. out-stream)]
+    (println (str "class is: " (.getClass reader)))
+    (doseq [line (line-seq reader)]
+      (.println out line))))
+
+(defn send-text-file-2 [out-stream file-path]
+  (with-open [stream-reader (InputStreamReader. (FileInputStream. file-path))
+              reader (BufferedReader. stream-reader)
+              out (PrintWriter. out-stream)]
+    (println (str "class is: " (.getClass reader)))
+    (println (str "encoding for file " file-path " is: " (.getEncoding stream-reader)))
+    (doseq [line (line-seq reader)]
+      (.println out line))))
+
+(defn send-text-file-3 [out-stream file-path]
+  (with-open [file-reader (FileReader. file-path)
+              reader (BufferedReader. file-reader)
+              out (PrintWriter. out-stream)]
+    (println (str "class is: " (.getClass reader)))
+    (doseq [line (line-seq reader)]
+      (.println out line))))
 
 (defn get-dir-contents [file]
   (loop [contents "" dir (.list (java.io.File. file))]
@@ -57,22 +74,18 @@
       (subs contents 1)
       (recur (str contents "\n" (first dir)) (rest dir)))))
 
-(defn send-text [out-stream file-name headers]
-  (let [file-path (str @root-directory (convert-spaces file-name))]
-    (if (.exists (java.io.File. file-path))
-      (if (.isDirectory (java.io.File. file-path))
-        (do
-          (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                 :content-length (str "Content-Length: " (.length (get-dir-contents file-path)))))
-          (send-body out-stream (get-dir-contents file-path)))
-        (with-open [reader (BufferedReader.
-                   (InputStreamReader.
-                   (DataInputStream.
-                   (FileInputStream. file-path))))]
-          (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                          :content-length (get-content-length-header file-path)))
-          (send-text-file reader out-stream)))
-      (file-not-found out-stream headers))))
+(defn send-text [out-stream file-path headers]
+  (if (.exists (java.io.File. file-path))
+    (if (.isDirectory (java.io.File. file-path))
+      (do
+        (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                              :content-length (str "Content-Length: " (.length (get-dir-contents file-path)))))
+        (send-body out-stream (get-dir-contents file-path)))
+      (do
+        (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                        :content-length (get-content-length-header file-path)))
+        (send-text-file-3 out-stream file-path))))
+    (file-not-found out-stream headers))
 
 (defn process-file [out-stream file-name headers]
   (if (is-media (headers :type))
@@ -93,10 +106,9 @@
       (do
         (send-headers out-stream (assoc headers :status (get-status-header :ok)
                                         :content-length (str "Content-Length: " (.length "Hello World"))))
-  ;     (send-body out-stream (get-dir-contents (str @root-directory "/"))))
         (send-body out-stream "Hello World"))
       (let [file-path (convert-spaces (str @root-directory request))]
-        (process-file out-stream request
+        (process-file out-stream file-path
                     (assoc headers :type (get-type-header (get-file-type request))))))))
 
 (defn handle-post-request [out-stream request headers]

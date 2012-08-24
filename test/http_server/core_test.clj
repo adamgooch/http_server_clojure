@@ -56,7 +56,7 @@
               (str "GET /Users/Tank/Clojure/http-server/test/test%20file%202 HTTP/1.1\n" header_1 header_2)))))
 
   (testing "should receive directory contents when given GET directory")
-    (is (= '("http_server" "test file 2" "testFile")
+    (is (= '(".DS_Store" "http_server" "test file 2" "testFile")
            (:message (send-request (connect)
                      (str "GET /Users/Tank/Clojure/http-server/test HTTP/1.1\n" header_1 header_2)))))
 
@@ -76,7 +76,7 @@
   (def server (-main "/Users/Tank/Clojure/http-server"))
 
   (testing "should receive directory contents when given GET /test")
-    (is (= '("http_server" "test file 2" "testFile")
+    (is (= '(".DS_Store" "http_server" "test file 2" "testFile")
             (:message (send-request (connect)
                       (str "GET /test HTTP/1.1\n" header_1 header_2)))))
 
@@ -84,7 +84,7 @@
 
 (deftest get-directory-contents
   (testing "should return directory contents")
-    (is (= "http_server\ntest file 2\ntestFile"
+    (is (= ".DS_Store\nhttp_server\ntest file 2\ntestFile"
             (get-dir-contents "/Users/Tank/Clojure/http-server/test"))))
 
 (deftest get-file-type-test

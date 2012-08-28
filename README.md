@@ -1,13 +1,20 @@
 # http-server
 
-A Clojure library designed to ... well, that part is up to you.
+This is a simple HTTP server capable of serving web pages.  It runs on port 5000.
+A request of / will return "Hello World".  A request of a directory will return
+the contents of that directory.  A Host: header is required in the request as
+required by the HTTP1.1 protocol.  Persistent connections have not yet been
+implemented.
 
 ## Usage
+Make your current working directory the project folder then enter:
 
-FIXME
+   java -jar target/http-server-0.1.0-SNAPSHOT-standalone.jar
 
-## License
+at the console.  The server runs on port 5000 by default.  Press
+CNTRL C to stop the server.
 
-Copyright © 2012 FIXME
+If you want to point the server at a specific directory, simply enter
+the path of the directory after the launching command.
 
-Distributed under the Eclipse Public License, the same as Clojure.
+   java -jar target/http-server-0.1.0-SNAPSHOT-standalone.jar /Users/Public

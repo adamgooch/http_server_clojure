@@ -1,21 +1,17 @@
 (ns http-server.get-request
   (:require (http-server [headers :refer :all]))
-  (:import (java.io PrintWriter InputStreamReader FileInputStream BufferedReader FileReader)))
+  (:import (java.io PrintWriter InputStreamReader FileInputStream BufferedReader FileReader File)))
 
 (def root-directory (ref ""))
+(def not-found-content "HTTP/1.1 404 Not Found")
 
 (defn- convert-spaces [file-name]
   (clojure.string/replace file-name "%20" " "))
 
-(defn send-body [out-stream message]
-  (let [output (PrintWriter. out-stream)]
-    (.println output message)
-    (.close output)))
-
 (defn- file-not-found [out-stream headers]
   (send-headers out-stream (assoc headers :status (get-status-header :not-found)
-                                          :content-length (.length "HTTP/1.1 404 Not Found")))
-  (send-body out-stream "HTTP/1.1 404 Not Found"))
+                                :content-length (str "Content Length: " (.length not-found-content))
+                                :body not-found-content)))
 
 (defn get-file-type [file-name]
   (last (clojure.string/split file-name #"\.")))
@@ -24,40 +20,36 @@
   (with-open [input-stream (FileInputStream. file-path)]
     (clojure.java.io/copy input-stream out-stream)))
 
-(defn get-dir-contents [file]
-  (loop [contents "" dir (.list (java.io.File. file))]
-    (if (= (count dir) 0)
-      (subs contents 1)
-      (recur (str contents "\n" (first dir)) (rest dir)))))
+(defn serve-file [out-stream file-path headers]
+  (if (.isDirectory (File. file-path))
+    (let [dir-contents (apply str (map #(str % "\n") (.list (File. file-path))))]
+      (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                               :content-length (str "Content-Length: " (.length dir-contents))
+                               :body dir-contents)))
+    (do
+      (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                      :content-length (get-content-length-header file-path)))
+      (send-file out-stream file-path))))
 
 (defn- process-file [out-stream file-path headers]
-  (if (.exists (java.io.File. file-path))
-    (if (.isDirectory (java.io.File. file-path))
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                              :content-length (str "Content-Length: " (.length (get-dir-contents file-path)))))
-        (send-body out-stream (get-dir-contents file-path)))
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                        :content-length (get-content-length-header file-path)))
-        (send-file out-stream file-path)))
+  (if (.exists (File. file-path))
+    (serve-file out-stream file-path headers)
     (file-not-found out-stream headers)))
 
 (defn- echo-back-query-string [out-stream request headers]
   (let [request (clojure.string/split request #"\?")
         body (clojure.string/replace (clojure.string/replace (second request) "=" " = ") "&" "\n")]
     (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                    :content-length (str "Content-Length: " (+ 1 (.length body)))))
-    (send-body out-stream body)))
+                                    :content-length (str "Content-Length: " (+ 1 (.length body)))
+                                    :body body))))
 
 (defn handle-get-request [out-stream request headers]
   (if (re-find #"\?" request)
     (echo-back-query-string out-stream request headers)
     (if (= request "/")
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                           :content-length (str "Content-Length: " (.length "Hello World"))))
-        (send-body out-stream "Hello World"))
+      (send-headers out-stream (assoc headers :status (get-status-header :ok)
+                                        :content-length (str "Content-Length: " (.length "Hello World"))
+                                        :body "Hello World"))
       (let [file-path (convert-spaces (str @root-directory request))]
         (process-file out-stream file-path
-                           (assoc headers :type (get-type-header (get-file-type request))))))))
+                                 (assoc headers :type (get-type-header (get-file-type request))))))))

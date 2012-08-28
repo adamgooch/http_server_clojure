@@ -1,9 +1,10 @@
 (ns http-server.core-test
   (:require [clojure.test :refer :all]
-            [http-server.core :refer :all])
+            [http-server.core :refer :all]
+            [http-server.get-request :refer :all])
   (:import (java.io BufferedReader InputStreamReader PrintWriter)))
 
-(def header_1 "Host: 127.0.0.1:1024\n")
+(def header_1 "Host: 127.0.0.1:5000\n")
 (def header_2 "User-Agent: HTTPTool/1.1\n\n")
 
 (defn connect []

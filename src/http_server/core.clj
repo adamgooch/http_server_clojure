@@ -1,125 +1,27 @@
 (ns http-server.core
   (:require (http-server [server :refer :all]
-                         [headers :refer :all])
-             (clojure [string :only (split) :as string]))
-  (:import (java.io BufferedReader InputStreamReader PrintWriter FileReader DataInputStream FileInputStream))
+                         [headers :refer :all]
+                         [get-request :refer :all])
+            (clojure [string :only (split) :as string]))
+  (:import (java.io BufferedReader InputStreamReader))
   (:gen-class))
 
 (def port 5000)
-(def root-directory (ref ""))
-
-(defn convert-spaces [file-name]
-  (clojure.string/replace file-name "%20" " "))
-
-(defn send-body [out-stream message]
-  (let [output (PrintWriter. out-stream)]
-    (.println output message)
-    (.close output)))
-
-(defn file-not-found [out-stream headers]
-  (send-headers out-stream (assoc headers :status (get-status-header :not-found)
-                                          :content-length (.length "HTTP/1.1 404 Not Found")))
-  (send-body out-stream "HTTP/1.1 404 Not Found"))
-
-(defn get-file-type [file-name]
-  (last (clojure.string/split file-name #"\.")))
-
-(defn is-media [type-header]
-  (= "image" (subs type-header 14 19)))
-
-(defn send-media-file [input-stream out-stream]
-  (with-open [out (clojure.java.io/output-stream out-stream)]
-    (loop [c (.read input-stream)]
-      (if (not= c -1)
-        (do
-          (.write out c)
-          (recur (.read input-stream)))))))
-
-(defn send-media [out-stream file-name headers]
-    (try
-      (with-open [input (clojure.java.io/input-stream file-name)]
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                                :content-length (get-content-length-header file-name)))
-        (send-media-file input out-stream))
-    (catch java.io.FileNotFoundException exception
-      (file-not-found out-stream headers))))
-
-(defn send-text-file-1 [out-stream file-path]
-  (with-open [reader (clojure.java.io/reader file-path)
-             out (PrintWriter. out-stream)]
-    (println (str "class is: " (.getClass reader)))
-    (doseq [line (line-seq reader)]
-      (.println out line))))
-
-(defn send-text-file-2 [out-stream file-path]
-  (with-open [stream-reader (InputStreamReader. (FileInputStream. file-path))
-              reader (BufferedReader. stream-reader)
-              out (PrintWriter. out-stream)]
-    (println (str "class is: " (.getClass reader)))
-    (println (str "encoding for file " file-path " is: " (.getEncoding stream-reader)))
-    (doseq [line (line-seq reader)]
-      (.println out line))))
-
-(defn send-text-file-3 [out-stream file-path]
-  (with-open [file-reader (FileReader. file-path)
-              reader (BufferedReader. file-reader)
-              out (PrintWriter. out-stream)]
-    (println (str "class is: " (.getClass reader)))
-    (doseq [line (line-seq reader)]
-      (.println out line))))
-
-(defn get-dir-contents [file]
-  (loop [contents "" dir (.list (java.io.File. file))]
-    (if (= (count dir) 0)
-      (subs contents 1)
-      (recur (str contents "\n" (first dir)) (rest dir)))))
-
-(defn send-text [out-stream file-path headers]
-  (if (.exists (java.io.File. file-path))
-    (if (.isDirectory (java.io.File. file-path))
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                              :content-length (str "Content-Length: " (.length (get-dir-contents file-path)))))
-        (send-body out-stream (get-dir-contents file-path)))
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                        :content-length (get-content-length-header file-path)))
-        (send-text-file-3 out-stream file-path))))
-    (file-not-found out-stream headers))
-
-(defn process-file [out-stream file-name headers]
-  (if (is-media (headers :type))
-    (send-media out-stream file-name headers)
-    (send-text out-stream file-name headers)))
-
-(defn echo-back-query-string [out-stream request headers]
-  (let [request (clojure.string/split request #"\?")
-        body (clojure.string/replace (clojure.string/replace (second request) "=" " = ") "&" "\n")]
-    (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                    :content-length (str "Content-Length: " (+ 1 (.length body)))))
-    (send-body out-stream body)))
-
-(defn handle-get-request [out-stream request headers]
-  (if (re-find #"\?" request)
-    (echo-back-query-string out-stream request headers)
-    (if (= request "/")
-      (do
-        (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                        :content-length (str "Content-Length: " (.length "Hello World"))))
-        (send-body out-stream "Hello World"))
-      (let [file-path (convert-spaces (str @root-directory request))]
-        (process-file out-stream file-path
-                    (assoc headers :type (get-type-header (get-file-type request))))))))
+(def log-file "/Users/Tank/temp/server_log.txt")
+(def no-host-message "No Host: header recevied")
+(def content-length-prefix "Content-Length: ")
+(def post-content "Temporary POST Request Content")
+(def put-content "Temporary PUT Request Content")
 
 (defn handle-post-request [out-stream request headers]
   (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                  :content-length (str "Content-Length: " (.length "POST Request"))))
-  (send-body out-stream "POST Request"))
+                                  :content-length (str content-length-prefix (.length post-content))))
+  (send-body out-stream post-content))
 
 (defn handle-put-request [out-stream request headers]
   (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                  :content-length (str "Content-Length: " (.length "PUT Request"))))
-  (send-body out-stream "PUT Request"))
+                                  :content-length (str content-length-prefix (.length put-content))))
+  (send-body out-stream put-content))
 
 (defn serve-client [out-stream request headers]
     (cond
@@ -132,32 +34,31 @@
 
 (defn send-no-host-header [out-stream headers]
   (send-headers out-stream (assoc headers :status (get-status-header :bad-request)
-                                :content-length (str "Content-Length: " (.length "No Host: header received"))))
-  (send-body out-stream "No Host: header recevied"))
+                                :content-length (str content-length-prefix (.length no-host-message))))
+  (send-body out-stream no-host-message))
 
-(defn get-request [in-stream]
-  (with-open [w (clojure.java.io/writer "/Users/Tank/temp/server.txt" :append true)]
-    (let [input (BufferedReader. (InputStreamReader. in-stream))]
-      (loop [received (list (.readLine input)) cnt 10]
-        (if (not= (first received) "")
-          (do
-            (.write w (str (first received) "\n"))
-            (recur (conj received (.readLine input)) (dec cnt)))
-          received)))))
+(defn log-request [request]
+  (with-open [writer (clojure.java.io/writer log-file :append true)]
+    (doseq [line (reverse request)]
+      (.write writer (str line "\n")))))
+
+(defn acquire-request [in-stream]
+  (let [input (BufferedReader. (InputStreamReader. in-stream))]
+    (loop [request (list (.readLine input))]
+      (if (empty? (first request))
+          request
+          (recur (conj request (.readLine input)))))))
 
 (defn handle-client [in-stream out-stream]
-  (let [request (get-request in-stream)
+  (let [request (acquire-request in-stream)
         headers {:date (get-date-header), :type (get-type-header "txt"), :blank-line ""}]
+      (log-request request)
       (if (empty? (filter #(re-find #"Host: " %) request))
         (send-no-host-header out-stream headers)
-        (serve-client out-stream (clojure.string/split (last request) #" ") headers))))
-
-(defn start-server []
-  (create-server handle-client (java.net.ServerSocket. port)))
+        (serve-client out-stream (string/split (last request) #" ") headers))))
 
 (defn -main
   "Start the server."
   [& args]
   (dosync (ref-set root-directory (first args)))
-;  (println "server started...")
-  (start-server))
+  (create-server handle-client (java.net.ServerSocket. port)))

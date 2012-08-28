@@ -3,6 +3,7 @@
 /lib
 /classes
 /checkouts
+/cob_spec
 pom.xml
 *.jar
 *.class

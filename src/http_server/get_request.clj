@@ -2,7 +2,6 @@
   (:require (http-server [headers :refer :all]))
   (:import (java.io PrintWriter InputStreamReader FileInputStream BufferedReader FileReader File)))
 
-(def root-directory (ref ""))
 (def not-found-content "HTTP/1.1 404 Not Found")
 
 (defn- convert-spaces [file-name]
@@ -36,20 +35,21 @@
     (serve-file out-stream file-path headers)
     (file-not-found out-stream headers)))
 
-(defn- echo-back-query-string [out-stream request headers]
-  (let [request (clojure.string/split request #"\?")
-        body (clojure.string/replace (clojure.string/replace (second request) "=" " = ") "&" "\n")]
-    (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                    :content-length (str "Content-Length: " (+ 1 (.length body)))
-                                    :body body))))
+(defn- echo-back-query-string [out-stream request]
+  (let [split-request (clojure.string/split request #"\?")
+        body (clojure.string/replace (clojure.string/replace (second split-request) "=" " = ") "&" "\n")]
+    (send-headers out-stream {:status (get-status-header :ok)
+                              :type (get-type-header "txt")
+                              :content-length (str "Content-Length: " (+ 1 (.length body)))
+                              :body body})))
 
-(defn handle-get-request [out-stream request headers]
+(defn handle-get-request [out-stream root-directory request]
   (if (re-find #"\?" request)
-    (echo-back-query-string out-stream request headers)
+    (echo-back-query-string out-stream request)
     (if (= request "/")
-      (send-headers out-stream (assoc headers :status (get-status-header :ok)
-                                        :content-length (str "Content-Length: " (.length "Hello World"))
-                                        :body "Hello World"))
-      (let [file-path (convert-spaces (str @root-directory request))]
-        (process-file out-stream file-path
-                                 (assoc headers :type (get-type-header (get-file-type request))))))))
+      (send-headers out-stream {:status (get-status-header :ok)
+                                :type (get-type-header "txt")
+                                :content-length (str "Content-Length: " (.length "Hello World"))
+                                :body "Hello World"})
+      (let [file-path (convert-spaces (str root-directory request))]
+        (process-file out-stream file-path {:type (get-type-header (get-file-type request))})))))

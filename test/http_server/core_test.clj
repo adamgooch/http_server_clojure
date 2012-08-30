@@ -1,7 +1,6 @@
 (ns http-server.core-test
   (:require [clojure.test :refer :all]
-            [http-server.core :refer :all]
-            [http-server.get-request :refer :all])
+            [http-server.core :refer :all])
   (:import (java.io BufferedReader InputStreamReader PrintWriter)))
 
 (def header_1 "Host: 127.0.0.1:5000\n")
@@ -78,7 +77,7 @@
 (deftest directory-contents
   (def server (-main))
   (testing "should receive directory contents when given GET directory")
-    (is (= '(".DS_Store" "http_server" "test file 2" "testFile" "")
+    (is (= '(".DS_Store" "http_server" "test file 2" "testFile")
            (:message (send-request (connect default-port)
                      (str "GET /Users/Tank/Clojure/http-server/test HTTP/1.1\n" header_1 header_2)))))
 
@@ -88,30 +87,22 @@
   (def server (-main "-d" "/Users/Tank/Clojure/http-server"))
   (testing "should be able to point it to a directory")
     (is (= '("This is a short test file." "It has three lines." "This is the last one.")
-           (:message (send-request (connect default-port)
+            (:message (send-request (connect default-port)
                      (str "GET /test/testFile HTTP/1.1\n" header_1 header_2)))))
   (.close server))
 
 (deftest get-directory-contents-when-server-is-pointed-at-a-directory
   (def server (-main "-d" "/Users/Tank/Clojure/http-server"))
   (testing "should receive directory contents when given GET /test")
-    (is (= '(".DS_Store" "http_server" "test file 2" "testFile" "")
+    (is (= '(".DS_Store" "http_server" "test file 2" "testFile")
             (:message (send-request (connect default-port)
                       (str "GET /test HTTP/1.1\n" header_1 header_2)))))
   (.close server))
 
-(deftest get-file-type-test
-  (testing "should return html when given this file type")
-    (is (= "html" (get-file-type "Users/Tank/Sites/index.html"))))
-
-(deftest type-header-test
-  (testing "should return the correct content type header")
-    (is (= "Content-Type: text/html" (http-server.headers/get-type-header "html"))))
-
 (deftest get-containing-query
   (def server (-main "-d" "/Users/Tank/Clojure/http-server"))
   (testing "should echo back the query string")
-    (is (= '("variable1 = you" "variable2 = me" "")
+    (is (= '("variable1 = you" "variable2 = me")
            (:message (send-request (connect default-port)
                                 (str "GET /test?variable1=you&variable2=me HTTP/1.1\n" header_1 header_2)))))
   (.close server))
@@ -132,3 +123,12 @@
            (:message (send-request (connect 5000)
               (str "POST /public/simple_cgi.rb HTTP/1.1\n" header_1 header_2)))))
   (.close server))
+
+(deftest handle-get-query-with-no-value
+  (def server (-main))
+  (testing "should return the variable with a value of blank")
+    (is (= '("variable1 = " "variable2 = ")
+           (:message (send-request (connect default-port)
+                                (str "GET /test?variable1&variable2 HTTP/1.1\n" header_1 header_2)))))
+  (.close server))
+

@@ -1,21 +1,20 @@
 (ns http-server.get-request
-  (:require (http-server [headers :refer :all])
+  (:require (http-server [headers :refer (get-headers)]
+                         [util :refer (send-response)])
             (clojure [string :as string]))
   (:import (java.io PrintWriter InputStreamReader FileInputStream BufferedReader FileReader File)))
 
 (def not-found-content "HTTP/1.1 404 File Not Found")
+(def root-response "Hello World")
+(def default-file-type "txt")
 
 (defn- convert-spaces [file-name]
   (string/replace file-name "%20" " "))
 
-(defn- file-not-found [out-stream]
-  (send-headers out-stream {:status (get-status-header :not-found)
-                            :type (get-type-header "txt")
-                            :content-length (get-content-length-header not-found-content)
-                            :body not-found-content}))
-
-(defn get-file-type [file-name]
-  (last (string/split file-name #"\.")))
+(defn- get-file-type [file-name]
+  (if (not (nil? (re-find #"\." file-name)))
+    (last (string/split file-name #"\."))
+    default-file-type))
 
 (defn- send-file [out-stream file-path]
   (with-open [input-stream (FileInputStream. file-path)]
@@ -30,50 +29,37 @@
 (defn- serve-file [out-stream file-path]
   (if (.isDirectory (File. file-path))
     (let [dir-contents (get-dir-contents file-path)]
-      (send-headers out-stream {:status (get-status-header :ok)
-                                :type (get-type-header "txt")
-                                :content-length (get-content-length-header dir-contents)
-                                :body dir-contents}))
+      (send-response out-stream (get-headers :ok :txt dir-contents) dir-contents))
     (do
-      (send-headers out-stream {:status (get-status-header :ok)
-                                :type (get-type-header (get-file-type file-path))
-                                :content-length (str content-length-prefix (.length (File. file-path)))})
+      (send-response out-stream (get-headers :ok (keyword (get-file-type file-path)) (File. file-path)) nil)
       (send-file out-stream file-path))))
 
-(defn- process-file [out-stream file-path]
-  (if (.exists (File. file-path))
-    (serve-file out-stream file-path)
-    (file-not-found out-stream)))
-
-(defn- server-root-request [out-stream]
-  (let [body "Hello World"]
-    (send-headers out-stream {:status (get-status-header :ok)
-                              :type (get-type-header "txt")
-                              :content-length (get-content-length-header body)
-                              :body body})))
+(defn- process-file [out-stream encoded-file-path]
+  (let [file-path (convert-spaces encoded-file-path)]
+    (if (.exists (File. file-path))
+      (serve-file out-stream file-path)
+      (send-response out-stream (get-headers :not-found :txt not-found-content) not-found-content))))
 
 (defn- get-query-as-string [query]
-  (->> (seq query)
-       (map #(str (first %) " = " (last %) "\n"))
+  (->> (map #(str (first %) " = " (last %) "\n") query)
        (apply str)))
 
+(defn my-function [candidate]
+  (if (re-find #"=" candidate)
+    (string/split candidate #"=")
+    [candidate ""]))
+
 (defn- parse-query-string [query]
-  (->> (string/split query #"&")
-       (map #(string/split % #"="))
-       (into {})))
+  (map my-function (string/split query #"&")))
 
 (defn- echo-back-query-string [out-stream request]
   (let [query (parse-query-string (second (string/split request #"\?")))
         body (get-query-as-string query)]
-    (send-headers out-stream {:status (get-status-header :ok)
-                              :type (get-type-header "txt")
-                              :content-length (get-content-length-header body)
-                              :body body})))
+    (send-response out-stream (get-headers :ok :txt body) body)))
 
 (defn handle-get-request [out-stream root-directory request]
   (if (re-find #"\?" request)
     (echo-back-query-string out-stream request)
     (if (= request "/")
-      (server-root-request out-stream)
-      (let [file-path (convert-spaces (str root-directory request))]
-        (process-file out-stream file-path)))))
+      (send-response out-stream (get-headers :ok :txt root-response) root-response)
+      (process-file out-stream (str root-directory request)))))

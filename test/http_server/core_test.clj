@@ -111,7 +111,7 @@
 (deftest get-containing-query
   (def server (-main "-d" "/Users/Tank/Clojure/http-server"))
   (testing "should echo back the query string")
-    (is (= '("variable1 = you" "variable2 = me")
+    (is (= '("variable1 = you" "variable2 = me" "")
            (:message (send-request (connect default-port)
                                 (str "GET /test?variable1=you&variable2=me HTTP/1.1\n" header_1 header_2)))))
   (.close server))

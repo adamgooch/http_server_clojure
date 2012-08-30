@@ -3,9 +3,12 @@
 
 (def post-content "Temporary POST Request Content")
 
-(defn get-script-output [root-directory requested-file]
+(defn- get-script-output [root-directory requested-file]
   (let [process (.exec (java.lang.Runtime/getRuntime) (str root-directory requested-file))]
-    (with-open [reader (java.io.BufferedReader. (java.io.InputStreamReader. (.getInputStream process)))]
+    ;I'm reading the output to get the correct content length
+    (with-open [reader (java.io.BufferedReader.
+                       (java.io.InputStreamReader.
+                       (.getInputStream process)))]
       (loop [line (.readLine reader) body line]
         (if (not (.ready reader))
           body

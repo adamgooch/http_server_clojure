@@ -3,6 +3,7 @@
            (java.util Date)))
 
 (def log-file-2 "/Users/Tank/temp/server_request_log.txt")
+(def content-length-prefix "Content-Length: ")
 
 (defn get-status-header [status]
   (cond (= status :ok) "HTTP/1.1 200 OK"
@@ -12,8 +13,8 @@
 (defn get-date-header []
   (str "Date: " (.toString (Date.))))
 
-(defn get-content-length-header [file-path]
-  (str "Content-Length: " (.length (File. file-path))))
+(defn get-content-length-header [content]
+  (str content-length-prefix (.length content)))
 
 (defn get-type-header [file-type]
   (cond (= file-type "html") "Content-Type: text/html"

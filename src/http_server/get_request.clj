@@ -23,13 +23,13 @@
 (defn- get-dir-contents [path]
   (->> (File. path)
        .list
-       (map #(str % "\n"))
+       (map #(str "<a href= '" path "/" % "'>" % "</a><br/>"))
        (apply str)))
 
 (defn- serve-file [out-stream file-path]
   (if (.isDirectory (File. file-path))
     (let [dir-contents (get-dir-contents file-path)]
-      (send-response out-stream (get-headers :ok :txt dir-contents) dir-contents))
+      (send-response out-stream (get-headers :ok :html dir-contents) dir-contents))
     (do
       (send-response out-stream (get-headers :ok (keyword (get-file-type file-path)) (File. file-path)) nil)
       (send-file out-stream file-path))))

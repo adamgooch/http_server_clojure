@@ -36,7 +36,9 @@
   (let [request (acquire-request-headers in-stream)]
 ;    (log-request request)
     (if (empty? (filter #(re-find #"Host: " %) request))
-      (send-response out-stream (get-headers :bad-request :txt no-host-message) no-host-message)
+      (send-response out-stream
+                     (get-headers :bad-request :txt no-host-message)
+                     no-host-message)
       (serve-client out-stream (split (first request) #" "))))
   (.close in-stream)
   (.close out-stream))

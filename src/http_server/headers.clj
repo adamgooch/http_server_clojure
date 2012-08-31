@@ -6,8 +6,7 @@
         (= status :not-found) "HTTP/1.1 404 Not Found"
         (= status :bad-request) "HTTP/1.1 400 Bad Request"))
 
-(defn- get-date-header []
-  (str "Date: " (.toString (Date.))))
+(def get-date-header (str "Date: " (.toString (Date.))))
 
 (defn- get-content-length-header [content]
   (str "Content-Length: " (.length content)))
@@ -22,7 +21,7 @@
 
 (defn get-headers [status content-type content]
   {:status (get-status-header status)
-   :date (get-date-header)
+   :date get-date-header
    :type (get-type-header content-type)
    :content-length (get-content-length-header content)
    :blank-line ""})

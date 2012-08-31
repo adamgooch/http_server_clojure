@@ -44,13 +44,13 @@
   (->> (map #(str (first %) " = " (last %) "\n") query)
        (apply str)))
 
-(defn my-function [candidate]
-  (if (re-find #"=" candidate)
-    (string/split candidate #"=")
-    [candidate ""]))
+(defn- get-key-value-pairs [query-parameter]
+  (if (re-find #"=" query-parameter)
+    (string/split query-parameter #"=")
+    [query-parameter ""]))
 
 (defn- parse-query-string [query]
-  (map my-function (string/split query #"&")))
+  (map get-key-value-pairs (string/split query #"&")))
 
 (defn- echo-back-query-string [out-stream request]
   (let [query (parse-query-string (second (string/split request #"\?")))

@@ -47,7 +47,7 @@
   (testing "should be able to serve a file from a given directory")
     (let [server (-main)
           socket (connect default-port)]
-      (send-request socket "GET /Users/Tank/Clojure/http-server/test/testFile HTTP/1.1")
+      (send-request socket "GET ./test/testFile HTTP/1.1")
       (is (= '("This is a short test file." "It has three lines." "This is the last one.")
               (:message (get-response socket))))
       (.close server)
@@ -87,7 +87,7 @@
   (testing "should translate %20 into spaces in the file path")
     (let [server (-main)
           socket (connect default-port)]
-      (send-request socket "GET /Users/Tank/Clojure/http-server/test/test%20file%202 HTTP/1.1")
+      (send-request socket "GET ./test/test%20file%202 HTTP/1.1")
       (is (= "HTTP/1.1 200 OK"
              (:status-header (get-response socket))))
       (.close server)
@@ -97,7 +97,7 @@
   (testing "should receive directory contents when given GET directory")
     (let [server (-main)
           socket (connect default-port)]
-      (send-request socket "GET /Users/Tank/Clojure/http-server/test HTTP/1.1")
+      (send-request socket "GET ./test HTTP/1.1")
       (is (not (nil? (re-find #".DS_Store.*http_server.*test file 2.*testFile"
               (first (:message (get-response socket)))))))
       (.close server)
@@ -115,7 +115,7 @@
 
 (deftest get-file-contents-when-server-is-pointed-at-a-directory
   (testing "should be able to point it to a directory")
-    (let [server (-main "-d" "/Users/Tank/Clojure/http-server")
+    (let [server (-main "-d" ".")
           socket (connect default-port)]
       (send-request socket "GET /test/testFile HTTP/1.1")
       (is (= '("This is a short test file." "It has three lines." "This is the last one.")
@@ -125,7 +125,7 @@
 
 (deftest get-directory-contents-when-server-is-pointed-at-a-directory
   (testing "should receive directory contents when given GET /test")
-    (let [server (-main "-d" "/Users/Tank/Clojure/http-server")
+    (let [server (-main "-d" ".")
           socket (connect default-port)]
       (send-request socket "GET /test HTTP/1.1")
       (is (not (nil? (re-find #".DS_Store.*http_server.*test file 2.*testFile"
@@ -135,7 +135,7 @@
 
 (deftest get-containing-query
   (testing "should echo back the query string")
-    (let [server (-main "-d" "/Users/Tank/Clojure/http-server")
+    (let [server (-main "-d" ".")
           socket (connect default-port)]
       (send-request socket "GET /test?variable1=you&variable2=me HTTP/1.1")
       (is (= '("variable1 = you" "variable2 = me")
@@ -155,9 +155,10 @@
 
 (deftest process-script-with-post
   (testing "should return Hello World web page with a variable name embedded")
-    (let [server (-main "-d" "/Users/Tank/Clojure/http-server/cob_spec")
+    (let [server (-main "-d" ".")
           socket (connect default-port)]
-      (send-request socket "POST /public/simple_cgi.rb HTTP/1.1")
+;      (println (.getCanonicalPath (java.io.File. "."))) ;used for research
+      (send-request socket "POST /cob_spec/public/simple_cgi.rb HTTP/1.1")
       (is (= '("<html><body><h1>Hello Adam!</h1></body></html>")
               (:message (get-response socket))))
       (.close server)

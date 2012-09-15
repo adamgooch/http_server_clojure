@@ -40,7 +40,7 @@
       (serve-file out-stream file-path)
       (send-response out-stream (get-headers :not-found :txt not-found-content) not-found-content))))
 
-(defn- get-query-as-string [query]
+(defn- format-query-into-string [query]
   (->> (map #(str (first %) " = " (last %) "\n") query)
        (apply str)))
 
@@ -49,12 +49,12 @@
     (string/split query-parameter #"=")
     [query-parameter ""]))
 
-(defn- parse-query-string [query]
+(defn- parse-query [query]
   (map get-key-value-pairs (string/split query #"&")))
 
 (defn- echo-back-query-string [out-stream request]
-  (let [query (parse-query-string (second (string/split request #"\?")))
-        body (get-query-as-string query)]
+  (let [query (parse-query (second (string/split request #"\?")))
+        body (format-query-into-string query)]
     (send-response out-stream (get-headers :ok :txt body) body)))
 
 (defn handle-get-request [out-stream root-directory request]
